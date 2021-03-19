@@ -387,7 +387,7 @@ def getEvents(end_point, headers, request_body):
     
     # Format response into a list
     events_extended_list = response.json()['response']
-    #♠print(events_extended_list)
+    ##print(events_extended_list)
     #print('')
     events = []
     # append header names
@@ -399,7 +399,7 @@ def getEvents(end_point, headers, request_body):
                    'place', 
                    # details
                    'isPublic', 'isCompetitive', 'isEntertaining', 'isFree',
-                   'fares', 'startDate', 'endDate',
+                   'fares', 'dayWeek', 'startDate', 'startTime', 'endDate', 'endTime',
                    'isRegular',
                    'eventActivities', 'eventAudiences',
                    'eventLanguages',               
@@ -419,43 +419,48 @@ def getEvents(end_point, headers, request_body):
         else: 
             languageList = None
             
-        events.append(
-            [event['basicInfo']['id'], # id in URL. eventId
-             event['basicInfo']['publish'], # isVisibleOnWebsite
-             event['basicInfo']['translatedType'], # activityType
-             event['details']['status'],
-             
-             event['details']['eventLg'][0]['name'],
-             event['details']['eventLg'][0]['description'],
-             
-             event['details']['placeMainId'],
-             event['details']['eventLg'][0]['place'], # location - extra infos
-             
-             event['details']['public'], # isPublic
-             event['details']['competitive'], # isCompetitive
-             event['details']['entertaining'], # isEntertaining
-             event['details']['free'], # isFree
+        if not event['basicInfo'] == None:
+            events.append(
+                [event['basicInfo']['id'], # id in URL. eventId
+                 event['basicInfo']['publish'], # isVisibleOnWebsite
+                 event['basicInfo']['translatedType'], # activityType
+                 event['details']['status'],
+                 
+                 event['details']['eventLg'][0]['name'],
+                 event['details']['eventLg'][0]['description'],
+                 
+                 event['details']['placeMainId'],
+                 event['details']['eventLg'][0]['place'], # location - extra infos
+                 
+                 event['details']['public'], # isPublic
+                 event['details']['competitive'], # isCompetitive
+                 event['details']['entertaining'], # isEntertaining
+                 event['details']['free'], # isFree
+    
+                 event['details']['eventLg'][0]['fares'],
+                 event['details']['timetable'][0]['dayWeek'],
+                 stringToDate(event['details']['timetable'][0]['start']),
+                 stringToTime(event['details']['timetable'][0]['start']),
+                 stringToDate(event['details']['timetable'][0]['end']),
+                 stringToTime(event['details']['timetable'][0]['end']),
 
-             event['details']['eventLg'][0]['fares'],
-             stringToDate(event['details']['timetable'][0]['start']),
-             stringToDate(event['details']['timetable'][0]['end']),
-             event['details']['isRegular'],
-             
-             event['eventActivity'],
-             event['eventAudience'],
-             languageList,
-
-             event['details']['eventLg'][0]['organiser'],
-             
-             event['details']['contact']['name'],
-             event['details']['contact']['firstname'],
-
-             event['details']['organisation'],
-             event['details']['organiserPeople'],
-             event['details']['mail'],
-             event['details']['website'],
-
-             ])
+                 event['details']['isRegular'],
+                 
+                 event['eventActivity'],
+                 event['eventAudience'],
+                 languageList,
+    
+                 event['details']['eventLg'][0]['organiser'],
+                 
+                 event['details']['contact']['name'],
+                 event['details']['contact']['firstname'],
+    
+                 event['details']['organisation'],
+                 event['details']['organiserPeople'],
+                 event['details']['mail'],
+                 event['details']['website'],
+    
+                 ])
         
     # Convert to pandas dataframe
     df_events = pd.DataFrame(events[1:], columns=events[0])
@@ -487,21 +492,33 @@ def getFacilityTypes(end_point, headers, request_body):
     facilityTypes = []
     # append header names
     facilityTypes.append(['id', 'translatedName', 'status', 'facilityTypes'])
-    
+
+    facilityTypeDict = {'R':'Radio button', 'C':'Check boxes', 'F':'Text fields', 
+                        'M':'Comment field', 'S':'Drop down', 'T': 'Time', 
+                        'D':'Date', 'I':'Integer', 'A':'Disciplines', 'H': 'Title'
+                        }
     for i, facilityType in enumerate(facilityTypes_extended_list):
         # facilityTypeField
         # facilityTypeFields = ''
         # for element in facilityType['facilityTypeField']:
         #    facilityTypeFields += '{0}; '.format(element['name'])
         facilityTypeFields = []
-        facilityTypeFields = [element['name'] for element in facilityType['facilityTypeField']]
- 
+        facilityTypeName = [element['name'] for element in facilityType['facilityTypeField']]
+        
+        facilityTypeValues = [element['valueType'] for element in facilityType['facilityTypeField']] # datatype
+        facilityTypeValues = [facilityTypeDict.get(x, x) for x in facilityTypeValues]
+        
+        facilityTypeMandatory = [element['mandatory'] for element in facilityType['facilityTypeField']]
+        facilityTypeMandatory = ['*' if x == True else '' for x in facilityTypeMandatory]
+        
+        for i, element in enumerate(facilityTypeName):
+            facilityTypeFields.append(element + facilityTypeMandatory[i] + '(' + facilityTypeValues[i] +')')
 
         facilityTypes.append(
              [facilityType['id'],
               facilityType['translatedName'], 
               facilityType['status'],
-              facilityTypeFields
+              facilityTypeFields #name + mandatory + (type)
               ])
         
     # Convert to pandas dataframe
@@ -530,33 +547,54 @@ def getInfrastructures(end_point, headers, request_body):
         
     # Format response into a list
     infrastructures_extended_list = response.json()['response']
+    ## print(infrastructures_extended_list)
     infrastructures = []
     # append header names
-    infrastructures.append(['id', 'mainId', 'name',
+    infrastructures.append(['id', 'mainId', 'referenceKey', 'name',
                             'organisations',
                             'clubs',
                             'facilities',
+                            'status',
                             'details_automatedExternalDefibrillator',
                             'details_energyFile',
-                            'details_inPlaceId',])
+                            'details_inPlaceId',
+                            'infrastructureProperties'])
     
     for i, infrastructure in enumerate(infrastructures_extended_list):
         # infrastructureName
         if not infrastructure['basicInfo']['infrastructureLg'] == None:
-            infrastructureName = [language['name'] for language in infrastructure['basicInfo']['infrastructureLg']]
+            infrastructureName = infrastructure['basicInfo']['infrastructureLg'][0]['name']
+            # this is redundant, because only one value for each language.
+            # infrastructureName = [language['name'] for language in infrastructure['basicInfo']['infrastructureLg']]
         else:
             infrastructureName == None
+        
+        if not infrastructure['infrastructureProperties'] == None:
+            infraList = []
+            for infra in infrastructure['infrastructureProperties']:
+                ## Concatenate number, translatedLabel and type|trasnlatedLabel, if not null-values
+                number = xstr(infra['number'])
+                translatedLabel1 = xstr(infra['translatedLabel'])
+                translatedLabel2 = xstr(infra['type']['translatedLabel'])
+                infraList.append('{0} {1} {2}'.format(translatedLabel1, translatedLabel2, number))
+            infrastructureProperties = '; '.join(infraList)
+            
+        else:
+            infrastructureProperties == None
         
         infrastructures.append(
             [infrastructure['basicInfo']['id'],
              infrastructure['basicInfo']['mainId'],
+             infrastructure['basicInfo']['referenceKey'],
              infrastructureName,
              infrastructure['organisations'],
              infrastructure['clubs'], 
              infrastructure['facilities'],
+             infrastructure['details']['status'],
              infrastructure['details']['automatedExternalDefibrillator'],
              infrastructure['details']['energyFile'],
-             infrastructure['details']['inPlaceId']
+             infrastructure['details']['inPlaceId'],
+             infrastructureProperties
              ])
         
     # Convert to pandas dataframe
@@ -587,39 +625,78 @@ def getOrganisations(end_point, headers, request_body):
     # Format response into a list
     organisations_extended_list = response.json()['response']
     
+    # Subsidy status organisations
+    status_dict = {'N':'Non-Profit Organisation', 'U':'Unincorporated organisation', 'E':'Enterprise', 'P':'Public institution', None:'Undefined'}
+    
+    
     organisations = []
     # append header names
-    organisations.append(['id', 'translatedName',
-                          'status', 'translatedDescription', 'infraManager', 'isClub',
-                          'organisationTypeName', 'organisationTypeServiceName',
-                          'companyNumber', 'vat', 'legalName', 'legalStatus',
-                          'people', 
+    organisations.append(['id', 'nameEn', 'nameFr', 'nameNl',
+                          'status',
+                          'descriptionEn', 'descriptionFr', 'descriptionNl',
+                          'infraManager', 'isClub',
+                          'type name', 'subtype name', 'subtype info',
+                          'reference key', 'companyNumber', 'vat', 'legalName', 'legalStatus',
+                          'contact name', 'contact title', 'contact email', 'contact phone',
                           'infrastructures', 
                           'places', 
                           'organisationActivities', 
                           'organisationActivitiesAudiences'])
     
     for i, organisation in enumerate(organisations_extended_list):
-        # translatedTypeName
-        translatedTypeName = None
-        if not organisation['details']['organisationType'] == None: # check not null
-            translatedTypeName = organisation['details']['organisationType']['translatedTypeName']
-            # print(translatedTypeName)
-            
-        # translatedServiceName
-        translatedServiceName = None
+        # print(json.dumps(organisation, indent=2))
+        
+        # type and subtype
+        typeName = None
+        subTypeName = None
+        subTypeInfo = None
         if not organisation['details']['organisationType'] == None:
-            translatedServiceName = organisation['details']['organisationType']['translatedServiceName']
-            # print(translatedServiceName)
+            ## Club Type = Associated counties
+            if not organisation['details']['organisationType']['type'] == None: 
+                typeName = organisation['details']['organisationType']['type']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedTypeName']
+                subTypeInfo = None
+            ## Club Type = County
+            if not organisation['details']['organisationType']['city'] == None: 
+                typeName = organisation['details']['organisationType']['city']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedCityName']
+                subTypeInfo = organisation['details']['organisationType']['translatedTypeName']
+            ## Club Type = Community
+            if not organisation['details']['organisationType']['community'] == None: 
+                typeName = organisation['details']['organisationType']['community']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedCommunityName']
+                subTypeInfo = None
+                
+            if not organisation['details']['organisationType']['level'] == None: 
+                typeName = organisation['details']['organisationType']['level']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedLevelName']
+                subTypeInfo = None
+                
+            ## Club Type = Schools
+            if not organisation['details']['organisationType']['network'] == None: 
+                typeName = organisation['details']['organisationType']['network']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedNetworkName']
+                subTypeInfo = organisation['details']['organisationType']['translatedLevelName'] + ' - ' + organisation['details']['organisationType']['translatedTypeName']
+            ## Club Type = Brussels Capital Region
+            if not organisation['details']['organisationType']['service'] == None: 
+                typeName = organisation['details']['organisationType']['service']['categoryBase']
+                subTypeName = organisation['details']['organisationType']['translatedServiceName']
+                subTypeInfo = None
+        # print(typeName)
+        # print(subTypeName)
             
-        # people
-        people = ''
+        # contact name, contact title, contact email, contact phone
+        contactName, contactTitle, contactEmail, contactPhone = '', '', '', ''
 #        persons = list()
         if not organisation['people'] == None:
-            people = ';'.join(['{0} {1}; '.format(person['firstname'], person['name']) for person in organisation['people']])
-#            for person in organisation['people']:
-#                persons.append('{0} {1}; '.format(person['firstname'], person['name']))
-#        people = concatenate_listitems(persons)
+            contactName = ';'.join(['{0} {1}'.format(xstr(person['firstname']), xstr(person['name'])) for person in organisation['people']])
+            contactTitle = ';'.join(['{0}'.format(xstr(person['title'])) for person in organisation['people']])
+            contactEmail = ';'.join(['{0}'.format(xstr(person['mail'])) for person in organisation['people']])
+            contactPhone = ';'.join(['{0} {1}'.format(xstr(person['phone']), xstr(person['mobile'])) for person in organisation['people']])
+
+            #for person in organisation['people']:
+            #    persons.append('{0} {1}; '.format(person['firstname'], person['name']))
+        #people = concatenate_listitems(persons)
         
         # infrastructures
         infrastructures = organisation['infrastructures']
@@ -639,18 +716,27 @@ def getOrganisations(end_point, headers, request_body):
              
         organisations.append(
             [organisation['basicInfo']['id'],
-             organisation['basicInfo']['translatedName'],
+             organisation['basicInfo']['nameEn'],
+             organisation['basicInfo']['nameFr'],
+             organisation['basicInfo']['nameNl'],
              organisation['details']['status'],
-             organisation['details']['translatedDescription'],
+             organisation['details']['descriptionEn'],
+             organisation['details']['descriptionFr'],
+             organisation['details']['descriptionNl'],             
              organisation['details']['infraManager'],
              organisation['details']['isClub'], 
-             translatedTypeName,
-             translatedServiceName,
+             typeName, # type name
+             subTypeName, # subtype name
+             subTypeInfo, # subtype info
+             organisation['basicInfo']['referenceKey'],
              organisation['details']['companyNumber'],
              organisation['details']['vat'],
              organisation['details']['legalName'],
-             organisation['details']['legalStatus'],
-             people,
+             status_dict[organisation['details']['legalStatus']],
+             contactName, # contact name
+             contactTitle, # contact title
+             contactEmail, # contact email
+             contactPhone, # contact phone
              infrastructures,
              places,
              organisationActivities,
@@ -688,7 +774,8 @@ def getPlaces(end_point, headers, request_body):
     places = []
     # append header names
     places.append(['id', 'nameEn', 'nameFr', 'nameNl', 'status', 
-                   'addresses', 'isUrbisAddress', 'urbisRef', 'sector',
+                   'streetFr', 'streetNl', 'number', 'postCode', 'city',
+                   'address', 'isUrbisAddress', 'urbisRef_x', 'urbisRef_y', 'sector',
                    'ownerType','isPublic', 'isSchool',
                    'property_carparking_isAvailable', 'property_carSpace',
                    'property_carSpacePMR', 'property_carSpaceVIP', 'property_carSpaceBus',
@@ -698,6 +785,13 @@ def getPlaces(end_point, headers, request_body):
                    'infrastructures', 'organisations'])
     for i, place in enumerate(places_extended_list):
         if not place['basicInfo'] == None:
+            coord_x = None
+            coord_y = None
+            if place['details']['addresses'][0]['urbisRef'] != None:
+                coords = place['details']['addresses'][0]['urbisRef']
+                #print(coords)
+                coord_x = float(coords.split(',')[1][:-1])
+                coord_y = float(coords.split(',')[0][1:])
             
             property_carparking_isAvailable = None    
             property_carSpace = None
@@ -767,12 +861,18 @@ def getPlaces(end_point, headers, request_body):
                  place['basicInfo']['nameFr'],
                  place['basicInfo']['nameNl'],
                  place['details']['status'],
+                 place['details']['addresses'][0]['streetFR'],
+                 place['details']['addresses'][0]['streetNL'],
+                 place['details']['addresses'][0]['number'],
+                 place['details']['addresses'][0]['postCode'],
+                 place['details']['addresses'][0]['city'],
                  '{0} {1} {2} {3}'.format(place['details']['addresses'][0]['streetFR']
                                           , place['details']['addresses'][0]['number']
                                           , place['details']['addresses'][0]['postCode']
                                           , place['details']['addresses'][0]['city']),
                  place['details']['addresses'][0]['isUrbisAddress'],
-                 place['details']['addresses'][0]['urbisRef'],
+                 coord_x,
+                 coord_y,
                  place['details']['sector'],
                  place['details']['ownerType'],  
                  place['details']['public'],
@@ -814,6 +914,9 @@ def getSubsidies(end_point, headers, request_body):
     """
     url = end_point + '/api/Subsidy/GetSubsidies'
     
+    # Subsidy status dictionary
+    # status_dict = {'N':'N-code: Draft?', 'V':'Validated', 'E':'Exported', 'L':'Legacy', 'D':'Draft', 'R':'Refused', 'W':'Waiting for validation'}
+    
     # Launch API Call
     response = requests.post(url, headers=headers, data=json.dumps(request_body))
         
@@ -822,26 +925,35 @@ def getSubsidies(end_point, headers, request_body):
     subsidies = []
     
     # append header names
-    subsidies.append(['id', 'type_name', 'subsidisingPartner', 'creationDate', 'amount', 'status', 'contact', 
-                      'organisationMainId', 'organisationSubsidyBpl',
-                      'infrastructureId', 'modificationDate', 'startDate', 'endDate'
+    subsidies.append(['id', 'name', 'subsidy organisation', 'more information', 'status', 'date', 'amount',
+                      'modification date',
+                      'operating subsidy', 'subsidy type', 'starting date', 'closing date',
+                      'contact', 
+                      'organisationMainId',
+                      'organisationSubsidyBpl',
+                      'infrastructureId'
                       ])
     for i, subsidy in enumerate(subsidies_extended_list):
 
         subsidies.append(
             [subsidy['id'],
              subsidy['type']['name'],  
-             subsidy['subsidisingPartner']['name'],
+             subsidy['subsidisingPartner']['name'], # subsidy organisation
+             subsidy['type']['informationPage'], # more information
+             subsidy['status'], # status_dict[subsidy['status']],
              stringToDate(subsidy['creationDate']),
              subsidy['amount'],
-             subsidy['status'],
+             
+             stringToDate(subsidy['modificationDate']), # modification date
+             
+             subsidy['type']['operatingSubsidy'], # operating subsidy
+             subsidy['type']['typeOfSubsidy'], # subsidy type
+             stringToDate(subsidy['type']['startDate']), # starting date
+             stringToDate(subsidy['type']['endDate']), # closing date
              subsidy['contact'],
              subsidy['organisationMainId'],
              subsidy['organisationSubsidyBpl'],
-             subsidy['infrastructureId'],
-             stringToDate(subsidy['modificationDate']),
-             stringToDate(subsidy['type']['startDate']),
-             stringToDate(subsidy['type']['endDate']),
+             subsidy['infrastructureId']
              ])
         
     # Convert to pandas dataframe
@@ -869,6 +981,30 @@ def stringToDate(inputString):
             # date with nanoseconds
             date = datetime.strptime(inputString, '%Y-%m-%dT%H:%M:%S.%f').date()
     return date
+
+
+def stringToTime(inputString):
+    """
+    Converts string to datetime values and format date to dd/mm/yyyy format
+    
+    Returns
+    -------
+    time : datetime
+        formatted date (dd-mm-yyyy).
+
+    """
+    # Convert string to times if not null
+    if inputString is None or inputString == '':
+        time = inputString
+    else:
+        try:
+            # Time without nanoseconds
+            time = datetime.strptime(inputString, '%Y-%m-%dT%H:%M:%S').time()
+        except:
+            # time with nanoseconds
+            time = datetime.strptime(inputString, '%Y-%m-%dT%H:%M:%S.%f').time()
+    return time
+
 
 def getFacilities(end_point, headers, request_body):
     """
@@ -898,8 +1034,8 @@ def getFacilities(end_point, headers, request_body):
     facilities = []
     
     # append header names
-    facilities.append(['id', 'mainId', 'name', 
-                       'facilityTypeId', 'facilityTypeName',
+    facilities.append(['id', 'mainId', 'facilityTypeId', 'nameEn', 'nameFr', 'nameNl', 
+                       #'facilityTypeName',
                        'accessiblePRM', 'infrastructureMainId', 'organisationMainId', 'status',
                        'activities', 
                        'facilityTypeValues'
@@ -908,9 +1044,11 @@ def getFacilities(end_point, headers, request_body):
         facilities.append(
             [facility['basicInfo']['id'],
              facility['basicInfo']['mainId'],
-             facility['basicInfo']['facilityLg'][0]['name'],
              facility['basicInfo']['type']['id'],
-             facility['basicInfo']['type']['translatedName'],
+#             facility['basicInfo']['facilityLg'][0]['name'],
+             facility['basicInfo']['type']['name']['translations'][0]['translation'],
+             facility['basicInfo']['type']['name']['translations'][1]['translation'],
+             facility['basicInfo']['type']['name']['translations'][2]['translation'],
              facility['details']['accessiblePRM'],
              facility['details']['infrastructureMainId'],
              facility['details']['organisationMainId'],
@@ -997,3 +1135,9 @@ def formatAddress(lst_addresses, lang='fr'):
                 street = dict_address.get('streetEN')
             address = '{0} {1} {2} {3}'.format(street, dict_address.get('number'), dict_address.get('postCode'), dict_address.get('city'))
     return address
+
+def xstr(s):
+    if s is None:
+        return ''
+    else:
+        return str(s)
